@@ -1,4 +1,4 @@
-from lexer import Tokenizer
+from lexer import Token, Tokenizer
 from sly import Parser
 from utils import error_message
 
@@ -9,8 +9,9 @@ class OneParser(Parser):
     
     precedence = (('left', ADD, SUB),
                   ('left', MULT, DIV),
+                  ('right', "LESS_THAN", "GREAT_THAN"),
+                  ("left", "AND", "OR"),
                   ('right', 'UMINUS'),
-                  ('left', BLOCK_START, BLOCK_END)
     )
 
     def __init__(self):
@@ -18,67 +19,97 @@ class OneParser(Parser):
         self.scope = "global"
         self.raw_prog = None
 
+    
+    @_("")
+    def program(self, p):
+        pass
+
     @_("statement")
     def program(self, p):
-        return ("program", None, p.statement)
+        return ("program", p.statement, None)
 
-    @_("statement SEMI")
-    def program(self, p):
-        return ("program", None, p.statement)
 
     @_("statement SEMI program")
     def program(self, p):
-        return("program", p.statement, p.program)
+        return("program", p.program, p.statement)
 
 
-    @_("FUNC_DEF IDENTIFIER COLON BLOCK_START program BLOCK_END")
+    @_("FUNC_DEF IDENTIFIER COLON program BLOCK_END")
     def statement(self, p):
-        return("func_def_void", p.IDENTIFIER, p.program)
+        return("func_def_void", p.IDENTIFIER, p.program, p)
 
-    @_("FUNC_DEF IDENTIFIER f_args COLON program BLOCK_END")
+    @_("FUNC_DEF IDENTIFIER SUB GREAT_THAN f_args COLON program BLOCK_END")
     def statement(self, p):
-        return("func_def_args", p.IDENTIFIER, p.f_args, p.program)
+        return("func_def_args", p.IDENTIFIER, p.f_args, p.program, p)
 
-    @_("IF L_BRACE expression R_BRACE BLOCK_START program BLOCK_END")
+    @_("IF expression COLON program BLOCK_END")
     def statement(self, p):
-        return ("if_setup", p.expression, p.program)
+        return ("if_statement", p.expression, p.program, p)
 
-    @_("IF L_BRACE expression R_BRACE BLOCK_START program BLOCK_END ELSE BLOCK_START program BLOCK_END")
+    @_("IF  expression COLON program ELSE COLON program BLOCK_END")
     def statement(self, p):
-        return ("if_else_setup", p.expression, p.program0, p.program1)
+        return ("if_else_statement", p.expression, p.program0, p.program1, p)
 
-    @_("WHILE L_BRACE expression R_BRACE BLOCK_START program BLOCK_END")
+    @_("WHILE expression COLON program BLOCK_END")
     def statement(self, p):
-        return ("while_setup", p.expression, p.program)
+        return ("while_setup", p.expression, p.program), p
 
-    @_('FOR expression TO expression BLOCK_START program BLOCK_END')
+    @_('FOR IDENTIFIER IN expression COLON program BLOCK_END')
     def statement(self, p):
-        return ('for_loop', ('for_loop_setup', p.expression0, p.expression1), p.program)
+        return ('for_loop', p.IDENTIFIER, p.expression, p.program, p)
 
     @_("RETURN expression")
     def statement(self, p):
-        return ("return_stack", p.expression)
+        return ("return_stack", p.expression, p)
 
     @_("IDENTIFIER L_BRACE elements R_BRACE")
     def expression(self, p):
-        return ("func_call", p.IDENTIFIER, p.elements)
+        return ("func_call", p.IDENTIFIER, p.elements, p)
 
 
     @_("DECLARATION IDENTIFIER ASSIGN statement")
     def statement(self, p):
-        return ("var_decl_dynamic", p.IDENTIFIER, p.statement)
+        return ("var_decl_dynamic", p.IDENTIFIER, p.statement, p)
 
     @_("IDENTIFIER ASSIGN expression")
     def statement(self, p):
-        return ("var_re_assign", p.IDENTIFIER, p.expression)
+        return ("var_re_assign", p.IDENTIFIER, p.expression, p)
 
-    @_("DECLARATION IDENTIFIER L_SQBRACE R_SQBRACE ASSIGN L_SQBRACE elements R_SQBRACE")
+    @_("DECLARATION IDENTIFIER ASSIGN L_SQBRACE elements R_SQBRACE")
     def statement(self, p):
-        return ("array_decl", p.identifier)
+        return ("array_decl", p.IDENTIFIER, p.elements, p)
+
+    @_("IDENTIFIER ASSIGN L_SQBRACE elements R_SQBRACE")
+    def statement(self, p):
+        return ("array_re_assign", p.IDENTIFIER, p.elements, p)
+
+    @_("STRUCT IDENTIFIER COLON f_args SEMI BLOCK_END")
+    def statement(self, p):
+        return ("struct_def", p.IDENTIFIER, p.f_args, p)
+
+    @_("IDENTIFIER L_SQBRACE expression R_SQBRACE")
+    def expression(self, p):
+        return ("element_access", p.IDENTIFIER, p.expression, p)
+
+    @_("IDENTIFIER L_CURLY elements R_CURLY")
+    def expression(self, p):
+        return ("struct_assign", p.IDENTIFIER, p.elements, p)
+
+    @_("IDENTIFIER DOT IDENTIFIER")
+    def expression(self,p):
+        return ("struct_element_access", p.IDENTIFIER0, p.IDENTIFIER1, p)
+
+    @_("IDENTIFIER DOT IDENTIFIER SUB GREAT_THAN expression")
+    def expression(self,p):
+        return ("struct_element_reassign", p.IDENTIFIER0, p.IDENTIFIER1, p.expression, p)
 
     @_("expression")
     def statement(self, p):
         return p.expression
+
+    @_("")
+    def f_args(self, p):
+        return []
 
 
     @_("DECLARATION IDENTIFIER")
@@ -89,6 +120,10 @@ class OneParser(Parser):
     def f_args(self, p):
         p.f_args.append(p.IDENTIFIER)
         return p.f_args
+
+    @_("")
+    def elements(self, p):
+        return []
 
     @_("IDENTIFIER")
     def elements(self, p):
@@ -101,7 +136,6 @@ class OneParser(Parser):
     @_("expression")
     def elements(self, p):
         return [("expr", p.expression)]
-
 
     @_('elements COMMA elements')
     def elements(self, p):
@@ -126,85 +160,86 @@ class OneParser(Parser):
         return p.literal
 
     @_("IDENTIFIER")
-    def expression(self, p):
+    def literal(self, p):
         return ("var", p.IDENTIFIER)
 
     @_("L_BRACE expression R_BRACE")
     def expression(self, p):
         return p.expression
 
-    @_("IDENTIFIER L_SQBRACE expression R_SQBRACE")
-    def expression(self, p):
-        return ("element_access", p.IDENTIFIER, p.expression)
 
     @_("expression ADD expression")
     def expression(self, p):
-        return("arithmetic", "add", p.expression0, p.expression1)
+        return("arithmetic", "add", p.expression0, p.expression1, p)
 
     @_("expression MOD expression")
     def expression(self, p):
-        return("arithmetic", "mod", p.expression0, p.expression1)
+        return("arithmetic", "mod", p.expression0, p.expression1, p)
 
     @_("expression SUB expression")
     def expression(self, p):
-        return("arithmetic", "minus", p.expression0, p.expression1)
+        return("arithmetic", "minus", p.expression0, p.expression1, p)
 
-    @_("expression DIV expression")
+    @_(" expression DIV expression")
     def expression(self, p):
-        return("arithmetic", "div", p.expression0, p.expression1)
+        return("arithmetic", "div", p.expression0, p.expression1, p)
 
     @_("expression MULT expression")
     def expression(self, p):
-        return("arithmetic", "mult", p.expression0, p.expression1)
+        return("arithmetic", "mult", p.expression0, p.expression1, p)
 
-    @_("expression NOT expression")
+    @_("L_BRACE expression OR expression R_BRACE")
     def expression(self, p):
-        return("compare", "not", p.expression0, p.expression1)
+        return("compare", "or", p.expression0, p.expression1, p)
 
-    @_("expression OR expression")
+    @_("L_BRACE expression AND AND expression R_BRACE")
     def expression(self, p):
-        return("compare", "or", p.expression0, p.expression1)
+        return("compare", "and", p.expression0, p.expression1, p)
 
-    @_("expression AND expression")
+    @_("L_BRACE expression GREAT_THAN expression R_BRACE")
     def expression(self, p):
-        return("compare", "and", p.expression0, p.expression1)
+        return("compare", "greater", p.expression0, p.expression1, p)
 
-    @_("expression GREAT_THAN expression")
+    @_("L_BRACE expression LESS_THAN expression R_BRACE")
     def expression(self, p):
-        return("compare", "greater", p.expression0, p.expression1)
+        return("compare", "lesser", p.expression0, p.expression1, p)
 
-    @_("expression LESS_THAN expression")
+    @_("L_BRACE expression ASSIGN ASSIGN expression R_BRACE")
     def expression(self, p):
-        return("compare", "lesser", p.expression0, p.expression1)
+        return("compare", "equal", p.expression0, p.expression1, p)
 
-    @_("expression ASSIGN ASSIGN expression")
+    @_("L_BRACE expression NOT ASSIGN expression R_BRACE")
     def expression(self, p):
-        return("compare", "equal", p.expression0, p.expression1)
+        return("compare", "notequal", p.expression0, p.expression1, p)
 
-    @_("expression NOT ASSIGN expression")
+    @_("L_BRACE expression GREAT_THAN ASSIGN expression R_BRACE")
     def expression(self, p):
-        return("compare", "notequal", p.expression0, p.expression1)
+        return("compare", "greaterequal", p.expression0, p.expression1, p)
 
-    @_("expression GREAT_THAN ASSIGN expression")
+    @_("L_BRACE expression LESS_THAN ASSIGN expression  R_BRACE")
     def expression(self, p):
-        return("compare", "greaterequal", p.expression0, p.expression1)
-
-    @_("expression LESS_THAN ASSIGN expression")
-    def expression(self, p):
-        return("compare", "lesserequal", p.expression0, p.expression1)
+        return("compare", "lesserequal", p.expression0, p.expression1, p)
 
     @_('"-" expression %prec UMINUS')
     def expression(self, p):
         return -p.expression
 
+    @_("IMPORT STRING")
+    def expression(self, p):
+        return ("import", p.STRING)
+
+
     def error(self, p):
-        if p:
+        if type(p) == Token:
             line_number = p.line_number
             line = self.raw_prog.split("\n")[line_number-1]
+        
             error_message(p, line, "Parser", message="Syntax error")
-            print(p)
         else:
             print("reached end of file. Are you missing a semi colon ?")
+
+        return None
+
 
 
 
