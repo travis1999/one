@@ -1,6 +1,6 @@
 from string import ascii_letters, digits
 import string
-from typing import Any, List
+from typing import Any, List, Tuple
 from utils import error_message
 
 class Token:
@@ -18,11 +18,12 @@ class Token:
 
 class Tokenizer:
     tok = {
-        "STRING", "ADD", "SUB", "MULT", "DIV", "MOD","TO",
+        "STRING", "ADD", "SUB", "MULT", "DIV", "MOD","IN",
         "ASSIGN", "L_BRACE", "R_BRACE", "L_SQBRACE",  "R_SQBRACE",
         "GREAT_THAN","LESS_THAN", "COLON", "COMMA", "DECLARATION",
-        "FOR", "WHILE", "FUNC_DEF", "IF", "ELSE",  "BLOCK_START", "BLOCK_END",
-        "RETURN", "NOT", "OR", "AND", "INT", "FLOAT", "IDENTIFIER", "SEMI"
+        "FOR", "WHILE", "FUNC_DEF", "IF", "ELSE", "BLOCK_END",
+        "RETURN", "NOT", "OR", "AND", "INT", "FLOAT", "IDENTIFIER", "SEMI",
+        "IMPORT", "STRUCT", "R_CURLY", "L_CURLY", "DOT"
         }
 
     def __init__(self) -> None:
@@ -38,6 +39,8 @@ class Tokenizer:
                        "R_BRACE": ")",
                        "L_SQBRACE": "[",
                        "R_SQBRACE": "]",
+                       "R_CURLY": "}",
+                       "L_CURLY": "{",
                        "GREAT_THAN": ">",
                        "LESS_THAN": "<",
                        "COLON": ":",
@@ -48,14 +51,18 @@ class Tokenizer:
                        "FUNC_DEF": "func",
                        "IF":"if", 
                        "ELSE":"else",  
-                       "BLOCK_START":"do", 
                        "BLOCK_END":"end",
                        "RETURN":"return",
                        "NOT": "!",
                        "OR": "|",
                        "AND": "&",
-                       "TO": "to",
-                       "SEMI": ";"
+                       "IN": "in",
+                       "SEMI": ";",
+                       "IMPORT": "import",
+                       "COMMENT": "#",
+                       "STRUCT": "struct",
+                       "DOT": "."
+                       
                        }
 
         self.tokenized = []
@@ -78,6 +85,8 @@ class Tokenizer:
         for line in self.program:
             self.current_line = line
             for char in line:
+                if char == "#":
+                    break
                 yield [char, line_no, position]
                 position += 1
             line_no += 1
@@ -91,8 +100,6 @@ class Tokenizer:
         except StopIteration:
             return None, None, None
 
-    def make_number(self, digit):
-        pass
 
     def get_key(self, val):
         for key, value in self.tokens.items():
@@ -195,7 +202,7 @@ class Tokenizer:
 
 
 
-    def tokenize(self, program: str) -> List[Token]:
+    def tokenize(self, program: str) -> Tuple[bool, List[Token]]:
         self.raw_program = program
         self.new_session(program)
         
@@ -213,7 +220,7 @@ class Tokenizer:
             if char[0] == " ":
                 continue
 
-            if char[0] in self.tokens["NUMBER"]+".":
+            if char[0] in self.tokens["NUMBER"]:
                 char, tok = self.make_number(char)
                 if char == False:
                     return char, tok
@@ -241,6 +248,7 @@ class Tokenizer:
 
         return True, self.tokenized
 
+
 test_prog = """
 func main args:
     do
@@ -250,7 +258,6 @@ func main args:
         print("area is:"+area)
     end
 """
-
 
 if __name__ == "__main__":
 
