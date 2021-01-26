@@ -1,2 +1,2 @@
 # one 
-A concept "programming laguage" that uses the sly library.
+A concept "programming laguage", written in python using the sly library.
